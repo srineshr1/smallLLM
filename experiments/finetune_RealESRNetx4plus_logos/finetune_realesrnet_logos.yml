@@ -1,0 +1,142 @@
+# GENERATE TIME: Thu Jun 11 17:29:03 2026
+# CMD:
+# scripts/train.py -opt configs/finetune_realesrnet_logos.yml
+
+# =============================================================================
+# Stage 1 — fine-tune RealESRNet (PSNR / L1 only) on logos.
+# Builds a stable base that has learned logo structure. Light on VRAM.
+# Run AFTER this with the GAN config (finetune_realesrgan_logos.yml).
+#
+# Launch:
+#   python scripts/train.py --config configs/finetune_realesrnet_logos.yml
+#
+# 8 GB VRAM notes:
+#   - batch_size_per_gpu=6 @ gt_size=256 fits comfortably for the net-only stage.
+#   - If you OOM: drop batch_size_per_gpu to 4, then gt_size to 192/128.
+#   - queue_size MUST stay divisible by batch_size_per_gpu (180 / 6 = 30, 180 / 4 = 45).
+# =============================================================================
+
+name: finetune_RealESRNetx4plus_logos
+model_type: RealESRNetModel
+scale: 4
+num_gpu: 1
+manual_seed: 0
+
+# ------------- on-the-fly degradation (how LR inputs are synthesized) ------- #
+gt_usm: True                       # sharpen the GT slightly before use
+
+# first degradation pass
+resize_prob: [0.2, 0.7, 0.1]       # up / down / keep
+resize_range: [0.15, 1.5]
+gaussian_noise_prob: 0.5
+noise_range: [1, 30]
+poisson_scale_range: [0.05, 3]
+gray_noise_prob: 0.4
+jpeg_range: [30, 95]
+
+# second degradation pass
+second_blur_prob: 0.8
+resize_prob2: [0.3, 0.4, 0.3]
+resize_range2: [0.3, 1.2]
+gaussian_noise_prob2: 0.5
+noise_range2: [1, 25]
+poisson_scale_range2: [0.05, 2.5]
+gray_noise_prob2: 0.4
+jpeg_range2: [30, 95]
+
+gt_size: 256
+queue_size: 180
+
+datasets:
+  train:
+    name: logos
+    type: RealESRGANDataset
+    dataroot_gt: data/logos_hr_color_prepared            # <- colored gilbarbara/logos set
+    meta_info: data/meta_info/meta_info_logos_color.txt  # <- colored meta_info
+    io_backend:
+      type: disk
+
+    # blur kernels (pass 1)
+    blur_kernel_size: 21
+    kernel_list: ['iso', 'aniso', 'generalized_iso', 'generalized_aniso', 'plateau_iso', 'plateau_aniso']
+    kernel_prob: [0.45, 0.25, 0.12, 0.03, 0.12, 0.03]
+    sinc_prob: 0.1
+    blur_sigma: [0.2, 3]
+    betag_range: [0.5, 4]
+    betap_range: [1, 2]
+
+    # blur kernels (pass 2)
+    blur_kernel_size2: 21
+    kernel_list2: ['iso', 'aniso', 'generalized_iso', 'generalized_aniso', 'plateau_iso', 'plateau_aniso']
+    kernel_prob2: [0.45, 0.25, 0.12, 0.03, 0.12, 0.03]
+    sinc_prob2: 0.1
+    blur_sigma2: [0.2, 1.5]
+    betag_range2: [0.5, 4]
+    betap_range2: [1, 2]
+
+    final_sinc_prob: 0.8
+
+    gt_size: 256
+    use_hflip: True
+    use_rot: False
+
+    # data loader (Windows-friendly: modest workers)
+    use_shuffle: true
+    num_worker_per_gpu: 4
+    batch_size_per_gpu: 6
+    dataset_enlarge_ratio: 1
+    prefetch_mode: ~
+
+# ------------------------------ networks ------------------------------------ #
+network_g:
+  type: RRDBNet
+  num_in_ch: 3
+  num_out_ch: 3
+  num_feat: 64
+  num_block: 23
+  num_grow_ch: 32
+
+# ------------------------------- paths -------------------------------------- #
+path:
+  # Pretrained RealESRNet generator (fetched by scripts/download_weights.py).
+  pretrain_network_g: weights/RealESRNet_x4plus.pth
+  param_key_g: params_ema
+  strict_load_g: true
+  resume_state: ~
+
+# ------------------------------ training ------------------------------------ #
+train:
+  ema_decay: 0.999
+  optim_g:
+    type: Adam
+    lr: !!float 2e-4
+    weight_decay: 0
+    betas: [0.9, 0.99]
+
+  scheduler:
+    type: MultiStepLR
+    milestones: [40000]
+    gamma: 0.5
+
+  # Fine-tuning needs far fewer iters than training from scratch.
+  total_iter: 20000
+  warmup_iter: -1
+
+  pixel_opt:
+    type: L1Loss
+    loss_weight: 1.0
+    reduction: mean
+
+# ------------------------------ logging ------------------------------------- #
+logger:
+  print_freq: 100
+  save_checkpoint_freq: !!float 2e3
+  use_tb_logger: true
+  wandb:
+    project: ~
+    resume_id: ~
+
+# dist / misc
+dist_params:
+  backend: nccl
+  port: 29500

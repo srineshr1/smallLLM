@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>pngmodel — AI Logo Refiner</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --card: #161b22;
+    --border: #30363d;
+    --text: #e6edf3;
+    --muted: #8b949e;
+    --accent: #58a6ff;
+    --green: #3fb950;
+    --red: #f85149;
+    --orange: #d2991d;
+    --purple: #a371f7;
+    --pink: #db61a2;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+    background: var(--bg); color: var(--text); line-height: 1.6; padding: 2rem;
+  }
+
+  .container { max-width: 960px; margin: 0 auto; }
+
+  h1 {
+    font-size: 2.4rem; font-weight: 700; margin-bottom: 0.3rem;
+    background: linear-gradient(135deg, var(--accent), var(--purple));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  h2 {
+    font-size: 1.5rem; margin: 2.5rem 0 1rem; padding-bottom: 0.4rem;
+    border-bottom: 2px solid var(--border);
+  }
+
+  h3 { font-size: 1.15rem; margin: 1.5rem 0 0.6rem; color: var(--accent); }
+
+  p, li { color: var(--muted); margin-bottom: 0.6rem; }
+  strong { color: var(--text); }
+
+  .card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 8px;
+    padding: 1.5rem; margin-bottom: 1.2rem;
+  }
+
+  .tagline {
+    font-size: 1.15rem; color: var(--muted); margin-bottom: 1.5rem;
+  }
+
+  /* Tables */
+  table { width: 100%; border-collapse: collapse; margin: 0.8rem 0 1.2rem; font-size: 0.9rem; }
+  th, td {
+    padding: 0.6rem 0.8rem; text-align: left;
+    border-bottom: 1px solid var(--border);
+  }
+  th { color: var(--text); font-weight: 600; background: rgba(88,166,255,0.06); }
+  td { color: var(--muted); }
+
+  .highlight-green { color: var(--green); font-weight: 600; }
+  .highlight-red { color: var(--red); font-weight: 600; }
+  .highlight-orange { color: var(--orange); font-weight: 600; }
+
+  /* Attempt cards */
+  .attempt { border-left: 4px solid; padding-left: 1rem; margin: 1rem 0; }
+  .attempt.fail { border-left-color: var(--red); }
+  .attempt.rejected { border-left-color: var(--orange); }
+  .attempt.success { border-left-color: var(--green); }
+
+  .attempt h4 { margin-bottom: 0.3rem; font-size: 1rem; }
+  .attempt p { font-size: 0.9rem; margin-bottom: 0.4rem; }
+
+  /* Code / inline */
+  code {
+    background: rgba(110,118,129,0.15); padding: 0.15em 0.4em; border-radius: 4px;
+    font-family: 'Fira Code', 'Cascadia Code', 'JetBrains Mono', monospace;
+    font-size: 0.88em;
+  }
+
+  /* Stat grid */
+  .stat-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 1rem; margin: 1rem 0;
+  }
+  .stat {
+    background: var(--card); border: 1px solid var(--border); border-radius: 8px;
+    padding: 1rem; text-align: center;
+  }
+  .stat .value { font-size: 1.6rem; font-weight: 700; color: var(--accent); }
+  .stat .label { font-size: 0.8rem; color: var(--muted); margin-top: 0.2rem; }
+
+  /* Loss chart bars */
+  .loss-bar-wrap { display: flex; align-items: center; gap: 0.6rem; margin: 0.3rem 0; }
+  .loss-bar-label { width: 80px; font-size: 0.82rem; color: var(--muted); text-align: right; flex-shrink: 0; }
+  .loss-bar-track { flex: 1; height: 10px; background: rgba(110,118,129,0.15); border-radius: 5px; overflow: hidden; }
+  .loss-bar-fill { height: 100%; border-radius: 5px; transition: width 0.6s; }
+
+  .key-takeaway {
+    background: linear-gradient(135deg, rgba(163,113,247,0.12), rgba(88,166,255,0.12));
+    border: 1px solid var(--purple); border-radius: 8px;
+    padding: 1.2rem 1.5rem; margin-top: 2rem; font-size: 1.05rem;
+  }
+  .key-takeaway strong { color: var(--purple); }
+
+  /* Pipeline step bar */
+  .pipeline {
+    display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center;
+    margin: 1rem 0;
+  }
+  .pipe-step {
+    background: var(--card); border: 1px solid var(--border); border-radius: 6px;
+    padding: 0.4rem 0.8rem; font-size: 0.85rem; color: var(--accent);
+    white-space: nowrap;
+  }
+  .pipe-arrow { color: var(--muted); }
+
+  footer {
+    margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--border);
+    text-align: center; font-size: 0.82rem; color: var(--muted);
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>pngmodel — AI Logo Refiner</h1>
+<p class="tagline">
+  Fine-tuned Real-ESRGAN on logo data to upscale low-quality logos into
+  <strong>high-res PNGs</strong> + <strong>clean SVGs</strong>.
+  Trained entirely on a single RTX 3070 Ti (8 GB VRAM).
+</p>
+
+<!-- ============================================================ -->
+<h2>1. Goal</h2>
+<div class="card">
+  <p>
+    Take a <strong>low-resolution, artifact-ridden logo</strong> and produce:
+  </p>
+  <ul style="padding-left:1.4rem; margin-top:0.5rem;">
+    <li>A <strong>4&times; upscaled, cleaned PNG</strong> (sharp edges, faithful colors, no hallucinated texture)</li>
+    <li>An <strong>SVG vector</strong> traced from the cleaned raster (via k-means color quantization + OpenCV contour detection)</li>
+  </ul>
+</div>
+
+<!-- ============================================================ -->
+<h2>2. Technology Stack &amp; Why Each Package</h2>
+
+<div class="card">
+
+  <h3>Core Frameworks</h3>
+  <table>
+    <tr><th style="width:25%">Package</th><th style="width:25%">Version</th><th>Why it was chosen</th></tr>
+    <tr>
+      <td><code>realesrgan</code></td><td>0.3.0</td>
+      <td>
+        The super-resolution GAN itself. Pretrained on photos, but its degradation-pipeline
+        architecture is perfect for fine-tuning on a new domain (logos).
+      </td>
+    </tr>
+    <tr>
+      <td><code>basicsr</code></td><td>1.4.2</td>
+      <td>
+        The training framework that Real-ESRGAN is built on. Handles data loading, degradation
+        synthesis, optimizers, schedulers, logging, and checkpointing.
+      </td>
+    </tr>
+    <tr>
+      <td><code>torch</code></td><td>2.1.2 (cu121)</td>
+      <td>
+        The deep-learning engine. Pinned to 2.1.2 because <code>basicsr</code> depends on
+        <code>torchvision.transforms.functional_tensor</code>, which was removed in
+        torchvision &ge; 0.17. A monkey-patch bridges the gap.
+      </td>
+    </tr>
+    <tr>
+      <td><code>torchvision</code></td><td>0.16.2</td>
+      <td>
+        Matched to PyTorch 2.1.2; provides image transforms and the VGG-19 backbone for the
+        perceptual loss.
+      </td>
+    </tr>
+  </table>
+
+  <h3>Image Processing</h3>
+  <table>
+    <tr><th style="width:25%">Package</th><th style="width:25%">Version</th><th>Why</th></tr>
+    <tr>
+      <td><code>opencv-python-headless</code></td><td>&ge; 4.8.0</td>
+      <td>
+        Bitmap &rarr; SVG tracing: contour detection, k-means color quantization, and polygon
+        simplification. Headless build skips GUI deps for lighter installs.
+      </td>
+    </tr>
+    <tr>
+      <td><code>Pillow</code></td><td>&ge; 10.0.0</td>
+      <td>Image I/O, resizing, format conversion. Lightweight and Pythonic.</td>
+    </tr>
+    <tr>
+      <td><code>numpy</code></td><td>&lt; 2.0</td>
+      <td>
+        Numerical backbone for every tensor-to-image operation. Pinned below 2.0 for
+        compatibility with <code>basicsr</code>.
+      </td>
+    </tr>
+  </table>
+
+  <h3>Data Pipeline &amp; SVG</h3>
+  <table>
+    <tr><th style="width:25%">Package</th><th style="width:25%">Version</th><th>Why</th></tr>
+    <tr>
+      <td><code>cairosvg</code></td><td>&ge; 2.7.0</td>
+      <td>
+        Renders SVG brand vectors to crisp PNG ground-truth images. Because SVGs are infinitely
+        sharp, they make perfect training targets &mdash; zero compression artifacts.
+      </td>
+    </tr>
+    <tr>
+      <td><code>vtracer</code></td><td>&ge; 0.6.11</td>
+      <td>
+        Production-grade raster-to-SVG tracer. Produces clean, minimal SVG paths with
+        color-posterization built in. Used as the default vectorizer in the Colab version
+        and as an alternative backend in the desktop app.
+      </td>
+    </tr>
+    <tr>
+      <td><code>lmdb</code></td><td>&mdash;</td>
+      <td>
+        Lightning Memory-Mapped Database. <code>basicsr</code> uses it for fast random access
+        to training patches without loading entire images into RAM.
+      </td>
+    </tr>
+  </table>
+
+  <h3>Utilities</h3>
+  <table>
+    <tr><th style="width:25%">Package</th><th style="width:25%">Version</th><th>Why</th></tr>
+    <tr>
+      <td><code>gradio</code></td><td>&ge; 4.0.0</td>
+      <td>Drag-and-drop web UI so anyone can upload a logo and get a refined PNG + SVG back without touching a terminal.</td>
+    </tr>
+    <tr>
+      <td><code>tb-nightly</code></td><td>&mdash;</td>
+      <td>TensorBoard logging &mdash; tracks loss curves in real time during training.</td>
+    </tr>
+    <tr>
+      <td><code>tqdm, pyyaml, scipy, addict, future, yapf</code></td><td>&mdash;</td>
+      <td>Progress bars, YAML configs, scientific helpers, dict utilities, Python 2/3 compat shims, and code formatting &mdash; all dependencies of the <code>basicsr</code> stack.</td>
+    </tr>
+  </table>
+
+</div>
+
+<!-- ============================================================ -->
+<h2>3. The Model</h2>
+
+<div class="card">
+  <h3>Architecture: RRDBNet (Real-ESRGAN)</h3>
+  <table>
+    <tr><th>Component</th><th>Details</th></tr>
+    <tr><td>Generator</td><td><strong>RRDBNet</strong> — 23 Residual-in-Residual Dense Blocks, 64 feature channels, 32 growth channels, &times;4 sub-pixel upscaling. ~16.7 million parameters. Input: 3-channel RGB. Output: 3-channel RGB at 4&times; resolution.</td></tr>
+    <tr><td>Discriminator</td><td><strong>U-Net with Spectral Normalization</strong> — ~4.38 million parameters. 4 down/up layers with skip connections. Judges per-pixel real-vs-fake, pushing the generator toward locally sharp detail.</td></tr>
+    <tr><td>Stage 1 (PSNR)</td><td><strong>RealESRNet</strong>: generator only, trained with L1 pixel loss. Builds a stable, structurally correct base. No discriminator &rarr; lower VRAM, faster iterations.</td></tr>
+    <tr><td>Stage 2 (GAN)</td><td><strong>RealESRGAN</strong>: generator + discriminator trained jointly with three losses: <strong>L1 pixel</strong> (weight 1.5), <strong>VGG-19 perceptual</strong> (weight 0.5), and <strong>GAN</strong> (weight 0.03). Adds crisp detail without hallucinating photographic texture.</td></tr>
+  </table>
+
+  <h3>Why fine-tune instead of training from scratch?</h3>
+  <p>
+    The official <code>RealESRGAN_x4plus</code> weights already know how to reverse
+    real-world image degradation (downscaling, blur, JPEG noise). Starting from those
+    weights means the model only needs to learn <em>what makes a logo different from
+    a photo</em> &mdash; flat colors, hard edges, text, no noise. This saves enormous
+    amounts of data and GPU time.
+  </p>
+</div>
+
+<!-- ============================================================ -->
+<h2>4. Training Details</h2>
+
+<div class="card">
+
+  <div class="stat-grid">
+    <div class="stat">
+      <div class="value">5,580</div>
+      <div class="label">Training images<br>(1,860 logos &times; 4 scales)</div>
+    </div>
+    <div class="stat">
+      <div class="value">20,000</div>
+      <div class="label">Iterations per stage</div>
+    </div>
+    <div class="stat">
+      <div class="value">~11 hrs</div>
+      <div class="label">Total training time<br>(Stage 1 + Stage 2)</div>
+    </div>
+    <div class="stat">
+      <div class="value">RTX 3070 Ti</div>
+      <div class="label">GPU &middot; 8 GB VRAM</div>
+    </div>
+  </div>
+
+  <h3>Stage 1 — RealESRNet (PSNR-oriented base)</h3>
+  <table>
+    <tr><th>Parameter</th><th>Value</th></tr>
+    <tr><td>Pretrained weights</td><td><code>weights/RealESRNet_x4plus.pth</code> (official)</td></tr>
+    <tr><td>Loss</td><td>L1 (pixel) only, weight = 1.0</td></tr>
+    <tr><td>Batch size</td><td>6 per GPU</td></tr>
+    <tr><td>Patch size</td><td>256 &times; 256</td></tr>
+    <tr><td>Optimizer</td><td>Adam, lr = 2e-4, betas = [0.9, 0.99]</td></tr>
+    <tr><td>Scheduler</td><td>MultiStepLR (milestone at 40,000, gamma = 0.5)</td></tr>
+    <tr><td>EMA decay</td><td>0.999</td></tr>
+    <tr><td>Total iterations</td><td>20,000 (22 epochs)</td></tr>
+    <tr><td><strong>Duration</strong></td><td><strong>6 hours 21 minutes</strong></td></tr>
+    <tr><td>Start &rarr; End loss</td><td>l_pix: 0.0205 &rarr; 0.0388 (fluctuates per batch; stable structure learned)</td></tr>
+  </table>
+
+  <h3>Stage 2 — RealESRGAN (GAN fine-tune)</h3>
+  <table>
+    <tr><th>Parameter</th><th>Value</th></tr>
+    <tr><td>Generator init</td><td>Stage 1 checkpoint: <code>net_g_20000.pth</code></td></tr>
+    <tr><td>Discriminator init</td><td>From scratch (no pretrained netD)</td></tr>
+    <tr><td>Losses</td><td>
+      L1 pixel: <strong>1.5</strong> &ensp;
+      VGG-19 perceptual: <strong>0.5</strong> &ensp;
+      GAN (vanilla): <strong>0.03</strong>
+    </td></tr>
+    <tr><td>Batch size</td><td>4 per GPU</td></tr>
+    <tr><td>Patch size</td><td>256 &times; 256</td></tr>
+    <tr><td>Optimizer (G &amp; D)</td><td>Adam, lr = 1e-4, betas = [0.9, 0.99]</td></tr>
+    <tr><td>Total iterations</td><td>20,000 (15 epochs)</td></tr>
+    <tr><td><strong>Duration</strong></td><td><strong>4 hours 37 minutes</strong></td></tr>
+  </table>
+
+  <h3>Loss Progression (Stage 2, final color run)</h3>
+  <table>
+    <tr><th>Iter</th><th>l_g_pix</th><th>l_g_percep</th><th>l_g_gan</th><th>l_d_real</th><th>l_d_fake</th></tr>
+    <tr><td>100</td><td>0.025</td><td>1.70</td><td>0.021</td><td>0.705</td><td>0.681</td></tr>
+    <tr><td>1,000</td><td>0.082</td><td>4.82</td><td>0.024</td><td>0.635</td><td>0.667</td></tr>
+    <tr><td>5,000</td><td>0.053</td><td>3.58</td><td>0.037</td><td>0.377</td><td>0.759</td></tr>
+    <tr><td>10,000</td><td>0.038</td><td>2.63</td><td>0.079</td><td>0.382</td><td>0.368</td></tr>
+    <tr><td>15,000</td><td>0.026</td><td>1.69</td><td>0.036</td><td>0.483</td><td>0.660</td></tr>
+    <tr style="background:rgba(88,166,255,0.05);">
+      <td><strong>20,000</strong></td>
+      <td><strong>0.030</strong></td>
+      <td><strong>1.99</strong></td>
+      <td><strong>0.099</strong></td>
+      <td><strong>0.321</strong></td>
+      <td><strong>0.452</strong></td>
+    </tr>
+  </table>
+</div>
+
+<!-- ============================================================ -->
+<h2>5. Before &amp; After: The Dataset Journey</h2>
+
+<div class="card">
+
+  <p>
+    The biggest lesson from this project: <strong>the model can only output what it
+    was shown during training.</strong> Here's how three dataset attempts taught that lesson.
+  </p>
+
+  <div class="attempt fail">
+    <h4><span class="highlight-red">Attempt 1 — FAILED:</span> Simple Icons (monochrome)</h4>
+    <p>
+      <strong>3,443 icons &rarr; ~10,300 training images.</strong>
+      Trained both stages. The result? <strong>Grayscale output with an embossed/metallic texture.</strong>
+    </p>
+    <p>
+      <strong>Root cause:</strong> Simple Icons are all single-color black silhouettes by design.
+      The model faithfully learned "logos = grayscale" and the GAN hallucinated fake texture
+      ("embossed metal") to add detail to flat shapes. It had never seen color, so it desaturated
+      everything.
+    </p>
+    <p class="highlight-red"><strong>Lesson:</strong> Training data is the ceiling &mdash; not the model architecture.</p>
+  </div>
+
+  <div class="attempt rejected">
+    <h4><span class="highlight-orange">Attempt 2 — REJECTED:</span> Scraped colored JPGs</h4>
+    <p>
+      ~2,000 colored logo JPGs. <strong>Rejected before training</strong> because the images
+      had JPEG compression artifacts, collages, mockups, and template text. Bad ground truth
+      = bad model output.
+    </p>
+  </div>
+
+  <div class="attempt success">
+    <h4><span class="highlight-green">Attempt 3 — THE FIX:</span> gilbarbara/logos (full-color vectors)</h4>
+    <p>
+      <strong>1,863 full-color brand SVGs &rarr; 1,860 clean PNGs &rarr; 5,580 training images</strong>
+      (with multi-scale augmentation at 1.0, 0.75, 0.5, and 0.33&times;).
+    </p>
+    <p>
+      Verified the mix: <strong>~75% colored, ~25% genuinely monochrome brand logos</strong>
+      &mdash; a realistic, healthy distribution.
+    </p>
+
+    <h3 style="margin-top:1rem;">Loss weight tuning for logo art (vs. photo defaults)</h3>
+    <table>
+      <tr>
+        <th>Loss function</th><th>Photo default</th>
+        <th><span class="highlight-green">Logo-tuned</span></th>
+        <th>Why the change</th>
+      </tr>
+      <tr>
+        <td>L1 pixel</td>
+        <td>1.0</td>
+        <td class="highlight-green"><strong>1.5</strong> &uarr;</td>
+        <td>Trust the real colors more &mdash; logos have precise brand colors</td>
+      </tr>
+      <tr>
+        <td>VGG perceptual</td>
+        <td>1.0</td>
+        <td class="highlight-green"><strong>0.5</strong> &darr;</td>
+        <td>Reduce texture invention &mdash; logos have flat regions, not fabric/grain</td>
+      </tr>
+      <tr>
+        <td>GAN (adversarial)</td>
+        <td>0.1</td>
+        <td class="highlight-green"><strong>0.03</strong> &darr;</td>
+        <td>Stop the "embossed metal" hallucination on flat color shapes</td>
+      </tr>
+    </table>
+
+    <p style="margin-top:0.8rem;">
+      <span class="highlight-green"><strong>Result:</strong></span> Color is preserved, edges are sharp,
+      and the embossed texture artifact is gone. The model now upscales logos <em>as logos</em>.
+    </p>
+  </div>
+
+</div>
+
+<!-- ============================================================ -->
+<h2>6. Quality Improvement Summary</h2>
+
+<div class="card">
+  <table>
+    <tr>
+      <th style="width:18%">Aspect</th>
+      <th style="width:41%">Before (monochrome model)</th>
+      <th style="width:41%">After (color model)</th>
+    </tr>
+    <tr>
+      <td><strong>Color</strong></td>
+      <td class="highlight-red">Output was grayscale &mdash; all color stripped</td>
+      <td class="highlight-green">Full color preserved, brand colors intact</td>
+    </tr>
+    <tr>
+      <td><strong>Texture artifacts</strong></td>
+      <td class="highlight-red">Embossed "metallic" texture hallucinated on flat shapes</td>
+      <td class="highlight-green">Clean, flat color regions without fake texture</td>
+    </tr>
+    <tr>
+      <td><strong>Edges</strong></td>
+      <td class="highlight-orange">Sharp but on grayscale output</td>
+      <td class="highlight-green">Sharp edges with correct color transitions</td>
+    </tr>
+    <tr>
+      <td><strong>Pixel fidelity</strong></td>
+      <td>L1 weight = 1.0 (photo emphasis)</td>
+      <td class="highlight-green">L1 weight = 1.5 (stronger color enforcement)</td>
+    </tr>
+    <tr>
+      <td><strong>Training data</strong></td>
+      <td class="highlight-red">100% monochrome icons (10,300 images)</td>
+      <td class="highlight-green">75% colored / 25% mono brands (5,580 images)</td>
+    </tr>
+  </table>
+</div>
+
+<!-- ============================================================ -->
+<h2>7. End-to-End Pipeline</h2>
+
+<div class="card">
+  <div class="pipeline">
+    <span class="pipe-step">SVG brands</span>
+    <span class="pipe-arrow">&rarr;</span>
+    <span class="pipe-step">Render PNGs (CairoSVG)</span>
+    <span class="pipe-arrow">&rarr;</span>
+    <span class="pipe-step">Multi-scale augment</span>
+    <span class="pipe-arrow">&rarr;</span>
+    <span class="pipe-step">Stage 1: PSNR base (6h 21m)</span>
+    <span class="pipe-arrow">&rarr;</span>
+    <span class="pipe-step">Stage 2: GAN fine-tune (4h 37m)</span>
+    <span class="pipe-arrow">&rarr;</span>
+    <span class="pipe-step">Inference: 4&times; upscale</span>
+    <span class="pipe-arrow">&rarr;</span>
+    <span class="pipe-step">SVG trace (vtracer / OpenCV)</span>
+    <span class="pipe-arrow">&rarr;</span>
+    <span class="pipe-step">Gradio UI / CLI</span>
+  </div>
+  <p style="margin-top:0.8rem;">
+    <strong>Input:</strong> a single low-quality logo PNG &mdash;
+    <strong>Output:</strong> a 4&times; high-res PNG + a scalable SVG vector.
+  </p>
+</div>
+
+<!-- ============================================================ -->
+<h2>8. Key Takeaway</h2>
+
+<div class="key-takeaway">
+  <p style="margin:0; font-size:1.1rem;">
+    <strong>It didn't fail because the AI was broken</strong> &mdash; it failed because it was
+    fed black-and-white logos and asked to produce color. The fix wasn't a better model or
+    hyperparameter tuning; the fix was <strong>better training data</strong> &mdash; clean
+    color brand SVGs with properly tuned loss weights for flat logo art.
+  </p>
+</div>
+
+<footer>
+  pngmodel &middot; Real-ESRGAN fine-tune on logos &middot; RTX 3070 Ti &middot; ~11 hours total training
+</footer>
+
+</div>
+</body>
+</html>

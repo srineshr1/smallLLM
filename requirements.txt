@@ -1,0 +1,41 @@
+# ---------------------------------------------------------------------------
+# pngmodel requirements
+#
+# IMPORTANT — install PyTorch FIRST, with CUDA, separately from this file.
+# For an RTX 3070 Ti (CUDA 12.1 build works well):
+#
+#   pip install torch==2.1.2 torchvision==0.16.2 --index-url https://download.pytorch.org/whl/cu121
+#
+# Then:  pip install -r requirements.txt
+#
+# WHY pinned torchvision 0.16.2:
+#   basicsr 1.4.2 imports `torchvision.transforms.functional_tensor`, which was
+#   REMOVED in torchvision >= 0.17. Newer torchvision will crash basicsr on import.
+#   If you must use a newer torchvision, see the patch note in scripts/train.py.
+# ---------------------------------------------------------------------------
+
+# Core training stack (Real-ESRGAN is built on BasicSR)
+basicsr==1.4.2
+realesrgan==0.3.0
+
+# Image / array handling
+numpy<2.0            # basicsr/opencv are happier on numpy 1.x
+opencv-python-headless>=4.8.0
+Pillow>=10.0.0
+tqdm>=4.66.0
+pyyaml>=6.0
+addict
+future
+lmdb
+scipy
+tb-nightly         # tensorboard logger used by basicsr
+yapf
+
+# Vectorization (raster PNG -> SVG)
+vtracer>=0.6.11
+
+# Optional: rendering free SVG icon sets into HR training PNGs (scripts/render_svgs.py)
+cairosvg>=2.7.0
+
+# Simple drop-a-logo UI
+gradio>=4.0.0

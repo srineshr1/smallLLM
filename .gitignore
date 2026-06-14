@@ -1,0 +1,26 @@
+# Weights / model files
+*.pth
+*.pt
+*.h5
+*.bin
+weights/
+
+# Training artifacts
+*.state
+*.log
+__pycache__/
+*.pyc
+*.pyo
+
+# Virtual environment
+.venv/
+
+# Binaries
+*.exe
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Notebook checkpoints
+.ipynb_checkpoints/
